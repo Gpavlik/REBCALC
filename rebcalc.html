@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>CRM Калькулятор знижок</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f1f1f1;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background-color: #008000;
+      color: white;
+      padding: 15px;
+      text-align: center;
+      font-size: 1.5em;
+      font-weight: bold;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    form {
+      background: white;
+      max-width: 500px;
+      margin: 30px auto;
+      padding: 20px;
+      border-radius: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-bottom: 10px;
+      color: #008000;
+      font-weight: bold;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      padding-left: 10px;
+      padding-top: 5px;
+      padding-bottom: 5px;
+    }
+    input, select {
+      width: 94%;
+      padding: 8px;
+      margin-top: 5px;
+      border: 1px solid #646464;
+      border-radius: 10px;
+    }
+    button {
+      background-color: #008000;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      margin-top: 15px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 1em;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    button:hover {
+      background-color: #32b63b;
+      color: #000000;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    #result {
+      max-width: 500px;
+      margin: 20px auto;
+      padding: 15px;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+    .success {
+      background: #c9c9c9;
+      border: 1px solid #ffffff;
+      color: #1b5e20;
+    }
+    .error {
+      background: #ffebee;
+      border: 1px solid #ffcdd2;
+      color: #b71c1c;
+    }
+    .suggestions {
+      margin-top: 10px;
+      padding-left: 15px;
+      border-left: 4px solid #008000;
+      color: #333;
+      font-weight: normal;
+    }
+  </style>
+</head>
+<body>
+
+<header>CRM Калькулятор знижок</header>
+
+<form id="discountCalc">
+  <label>Сума закупівлі (грн): <input type="number" id="purchase"></label>
+  <label>Знижка (%): <input type="number" id="discount"></label>
+  <label>Розтермінування (міс): <input type="number" id="months"></label>
+  
+  <label>Тип клієнта:
+    <select id="clientType">
+      <option value="partner">Партнер</option>
+      <option value="intermediary">Посередник</option>
+    </select>
+  </label>
+  
+  <label>Локація (для партнера):
+    <select id="location">
+      <option value="reagent">Реагентний договір</option>
+      <option value="district">Районний центр</option>
+      <option value="region">Обласний центр</option>
+      <option value="kyiv">Київ</option>
+    </select>
+  </label>
+  
+  <label>Тип знижки:
+    <select id="type">
+      <option value="накладна">В накладну</option>
+      <option value="товаром">Товаром</option>
+      <option value="зворотня_товарами">Зворотня товарами</option>
+      <option value="сертифікат">Сертифікатом</option>
+      <option value="готівка">Готівкою</option>
+    </select>
+  </label>
+  
+  <button type="button" onclick="runCalc()">Розрахувати</button>
+</form>
+
+<div id="result"></div>
+
+<script>
+const typeAdjustments = {
+  "накладна": 1.0,
+  "товаром": 0.9,
+  "зворотня_товарами": 0.8,
+  "сертифікат": 0.7,
+  "готівка": 0.7
+};
+
+// штраф за розтермінування
+function installmentPenalty(months) {
+  if (months === 0) return 0;
+  if (months <= 3) return 1;
+  if (months <= 6) return 2;
+  if (months <= 12) return 5;
+  return 10;
+}
+
+// функція виконання плану
+function planFactor(d) {
+  if (d <= 10) return 100 - d; 
+  else {
+    let a = -0.16, b = 0.6, c = 100;
+    return Math.max(0, a*d*d + b*d + c);
+  }
+}
+
+function runCalc() {
+  let purchase = parseFloat(document.getElementById("purchase").value);
+  let discount = parseFloat(document.getElementById("discount").value);
+  let months = parseFloat(document.getElementById("months").value);
+  let clientType = document.getElementById("clientType").value;
+  let location = document.getElementById("location").value;
+  let type = document.getElementById("type").value;
+
+  const thresholdsPartner = {"reagent":20000,"district":35000,"region":60000,"kyiv":70000};
+  const thresholdsIntermediary = [
+    {limit:35000,maxDiscount:10},
+    {limit:500000,maxDiscount:15},
+    {limit:1000000,maxDiscount:20},
+    {limit:2000000,maxDiscount:99}
+  ];
+
+  let maxDiscount = 0;
+  let resultText = "";
+  let cssClass = "success";
+
+  if (clientType === "partner") {
+    let minPurchase = thresholdsPartner[location];
+    if (purchase < minPurchase) {
+      let diff = minPurchase - purchase;
+      resultText = `❌ Закупівля недостатня.<br>
+      👉 Потрібно збільшити на ${diff} грн (до ${minPurchase} грн).`;
+      if (months > 0) resultText += `<br>👉 Або зменшити розтермінування до 0 місяців.`;
+      cssClass = "error";
+    } else {
+      if (type === "накладна") {
+        if (purchase >= 1000000) {
+          maxDiscount = 20;
+        } else if (purchase >= 565000) {
+          maxDiscount = 15;
+        } else {
+          maxDiscount = 10;
+        }
+      } else {
+        maxDiscount = (purchase >= 1000000) ? 20 : 10;
+      }
+    }
+  } else {
+    for (let t of thresholdsIntermediary) {
+      if (purchase >= t.limit) maxDiscount = t.maxDiscount;
+    }
+  }
+
+  // корекція за типом і розтермінуванням
+  let adjustedMax = maxDiscount * (typeAdjustments[type] || 1.0);
+  adjustedMax -= installmentPenalty(months);
+  if (adjustedMax < 0) adjustedMax = 0;
+
+  if (discount > adjustedMax) {
+    // підняття ціни договору
+    let expectedDiscountValue = purchase * (discount/100);
+    let allowedDiscountValue = purchase * (adjustedMax/100);
+    let delta = (expectedDiscountValue - allowedDiscountValue) / typeAdjustments[type];
+    let newTotal = purchase + delta;
+    let planPercent = planFactor(adjustedMax);
+    let planValue = purchase * (planPercent/100);
+
+    // підказка про розтермінування
+    let installmentText = "";
+    if (months > 0) {
+      installmentText = `- ⏳ Зменште розтермінування до 0 місяців (оплата по факту). У такому випадку максимально дозволена знижка збільшиться на ${installmentPenalty(months)}%.<br><br>`;
+    }
+
+    // пошук наступного порогу для додавання товару
+    let addText = "";
+    if (clientType === "partner" && type === "накладна") {
+      if (purchase < 565000 && discount > 10) {
+        let addAmount = 565000 - purchase;
+        let nextMax = 15;
+        let planNext = planFactor(nextMax);
+        let planValueNext = 565000 * (planNext/100);
+        addText = `- 📦 Додайте товару на ${addAmount} грн (з ${purchase} до 565000 грн), тоді можлива знижка ${nextMax}% для типу "накладна". У план зарахується ${planValueNext.toFixed(2)} грн (${planNext.toFixed(1)}%).<br><br>`;
+      } else if (purchase < 1000000 && discount > 15) {
+        let addAmount = 1000000 - purchase;
+        let nextMax = 20;
+        let planNext = planFactor(nextMax);
+        let planValueNext = 1000000 * (planNext/100);
+        addText = `- 📦 Додайте товару на ${addAmount} грн (з ${purchase} до 1000000 грн), тоді можлива знижка ${nextMax}% для типу "накладна". У план зарахується ${planValueNext.toFixed(2)} грн (${planNext.toFixed(1)}%).<br><br>`;
+      }
+    } else {
+      for (let t of thresholdsIntermediary) {
+        if (t.maxDiscount * (typeAdjustments[type] || 1.0) >= discount) {
+          if (t.limit > purchase) {
+            let addAmount = t.limit - purchase;
+            let nextMax = t.maxDiscount * (typeAdjustments[type] || 1.0);
+            let planNext = planFactor(nextMax);
+            let planValueNext = t.limit * (planNext/100);
+            addText = `- 📦 Додайте товару на ${addAmount} грн (з ${purchase} до ${t.limit} грн), тоді можлива знижка ${nextMax.toFixed(1)}% для типу "${type}". У план зарахується ${planValueNext.toFixed(2)} грн (${planNext.toFixed(1)}%).<br><br>`;
+            break;
+          }
+        }
+      }
+    }
+
+    resultText = `❌ Знижка ${discount}% неможлива.<br>
+    Максимально дозволено ${adjustedMax}% для типу "${type}" при розтермінуванні ${months} міс.<br><br>
+    <div class="suggestions">
+    👉 Пропозиції:<br>
+    ${installmentText}
+    ${addText}
+    - 💰 Збільште фінальну ціну угоди на ${delta.toFixed(2)} грн (до ${newTotal.toFixed(2)} грн). У такому випадку у план зарахується ${planValue.toFixed(2)} грн (${planPercent.toFixed(1)}%).<br><br>
+    - 🔄 Оберіть більш пріоритетний тип знижки (наприклад "В накладну").<br><br>
+    - Якщо клієнт наполягає — розгляньте варіант роботи через посередника.
+    </div>`;
+    cssClass = "error";
+  } else if (resultText === "") {
+    let discountValue = purchase * (discount/100);
+    let planPercent = planFactor(discount);
+    let planValue = purchase * (planPercent/100);
+    resultText = `✅ Знижка ${discount}% (${discountValue.toFixed(2)} грн).<br>
+    У план зарахується ${planValue.toFixed(2)} грн (${planPercent.toFixed(1)}%).`;
+    if (planPercent < 90 || discount > 10) cssClass = "error";
+  }
+
+  document.getElementById("result").className = cssClass;
+  document.getElementById("result").innerHTML = resultText;
+}
+
+</script>
+</body>
+</html>
