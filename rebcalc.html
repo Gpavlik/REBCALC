@@ -6,13 +6,17 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      background-color: #f1f1f1;
-      margin: 0;
-      padding: 0;
-    }
-    header {
       background-color: #008000;
       color: white;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+
+    }
+    header {
+      background-color: #ffffff;
+      color: rgb(0, 0, 0);
       padding: 15px;
       text-align: center;
       font-size: 1.5em;
@@ -90,8 +94,10 @@
 <body>
 
 <header>CRM Калькулятор знижок</header>
-
-<form id="discountCalc">
+ <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: center;">
+  <img src="./logo.svg" alt="logo" width="560">
+  
+  <form id="discountCalc">
   <label>Сума закупівлі (грн): <input type="number" id="purchase"></label>
   <label>Знижка (%): <input type="number" id="discount"></label>
   <label>Розтермінування (міс): <input type="number" id="months"></label>
@@ -124,7 +130,8 @@
   
   <button type="button" onclick="runCalc()">Розрахувати</button>
 </form>
-
+<img src="./ivd.png" alt="logo" width="560">
+</div>
 <div id="result"></div>
 
 <script>
